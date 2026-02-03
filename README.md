@@ -2,6 +2,8 @@
 
 Move module for storing gas price data on Sui blockchain.
 
+> **Data Format:** Prices are stored in **wei** (u128) for full precision. Each chain has its own gas token (ETH, MATIC, USDC).
+
 ## Structure
 ```
 sui-modules/
@@ -135,8 +137,21 @@ You will need these to configure your Bot `.env` file.
 
 | Function | Description |
 |----------|-------------|
-| `update_gas_price` | Update single chain price |
-| `batch_update_gas_prices` | Update all chains at once |
-| `get_current_price` | Read current price |
+| `update_gas_price` | Update single chain price (wei, u128) |
+| `batch_update_gas_prices` | Update all chains at once (wei, u128) |
+| `get_current_price` | Read current price in wei |
+| `get_gas_token` | Get gas token symbol (ETH, MATIC, USDC) |
+| `get_price_data` | Get full price data including high/low |
 | `get_buy_signal` | Check if good time to buy |
-| `add_chain` | Add support for new chains dynamically |
+| `add_chain` | Add new chain with gas token |
+
+## Supported Chains & Gas Tokens
+
+| Chain | Gas Token |
+|-------|----------|
+| ethereum | ETH |
+| base | ETH |
+| arbitrum | ETH |
+| polygon | MATIC |
+| optimism | ETH |
+| arc | USDC |
