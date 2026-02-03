@@ -1,7 +1,8 @@
 /// Gas Oracle Module for InvestingAs
 /// 
 /// Provides high-frequency gas price feeds for multiple EVM chains.
-/// Updated by an authorized oracle bot every 0.5 seconds.
+/// Updated by an authorized oracle bot. 
+/// Prices are stored in WEI for full precision.
 
 module gas_oracle::oracle {
     use std::string::String;
@@ -12,9 +13,6 @@ module gas_oracle::oracle {
     
     /// Price staleness threshold (5 minutes in milliseconds)
     const STALENESS_THRESHOLD_MS: u64 = 300000;
-    
-    /// Maximum volatility value (100 gwei)
-    const MAX_VOLATILITY: u64 = 100;
 
     // ============ Errors ============
     
@@ -43,14 +41,14 @@ module gas_oracle::oracle {
 
     /// Gas price data for a single chain
     public struct GasPrice has store, copy, drop {
-        /// Current gas price in gwei
-        price_gwei: u64,
-        /// 24-hour volatility (standard deviation in gwei)
-        volatility_24h: u64,
-        /// 24-hour high price
-        high_24h: u64,
-        /// 24-hour low price
-        low_24h: u64,
+        /// Current gas price in wei (smallest unit)
+        price_wei: u128,
+        /// Gas token symbol (ETH, MATIC, USDC, etc.)
+        gas_token: String,
+        /// 24-hour high price in wei
+        high_24h: u128,
+        /// 24-hour low price in wei
+        low_24h: u128,
         /// Timestamp of this update (milliseconds)
         timestamp_ms: u64,
     }
@@ -60,9 +58,9 @@ module gas_oracle::oracle {
     /// Emitted when gas price is updated
     public struct GasPriceUpdated has copy, drop {
         chain: String,
-        old_price: u64,
-        new_price: u64,
-        volatility: u64,
+        old_price: u128,
+        new_price: u128,
+        gas_token: String,
         timestamp_ms: u64,
     }
 
@@ -84,7 +82,7 @@ module gas_oracle::oracle {
             update_count: 0,
         };
 
-        // Initialize supported chains
+        // Initialize supported chains with their gas tokens
         let chains = vector[
             b"ethereum".to_string(),
             b"base".to_string(),
@@ -93,16 +91,26 @@ module gas_oracle::oracle {
             b"optimism".to_string(),
             b"arc".to_string(),
         ];
+        
+        let gas_tokens = vector[
+            b"ETH".to_string(),
+            b"ETH".to_string(),
+            b"ETH".to_string(),
+            b"MATIC".to_string(),
+            b"ETH".to_string(),
+            b"USDC".to_string(),
+        ];
 
         let mut i = 0;
         while (i < vector::length(&chains)) {
             let chain = *vector::borrow(&chains, i);
+            let gas_token = *vector::borrow(&gas_tokens, i);
             vector::push_back(&mut oracle.supported_chains, chain);
             
             // Initialize with zero price (will be updated by bot)
             table::add(&mut oracle.prices, chain, GasPrice {
-                price_gwei: 0,
-                volatility_24h: 0,
+                price_wei: 0,
+                gas_token,
                 high_24h: 0,
                 low_24h: 0,
                 timestamp_ms: 0,
@@ -126,22 +134,22 @@ module gas_oracle::oracle {
         oracle: &mut GasOracle,
         clock: &Clock,
         chain: String,
-        price_gwei: u64,
-        volatility_24h: u64,
-        high_24h: u64,
-        low_24h: u64,
+        price_wei: u128,
+        high_24h: u128,
+        low_24h: u128,
     ) {
         assert!(table::contains(&oracle.prices, chain), EChainNotSupported);
-        assert!(price_gwei > 0, EInvalidPrice);
+        assert!(price_wei > 0, EInvalidPrice);
 
         let current_time = clock.timestamp_ms();
         let old_price_data = table::borrow(&oracle.prices, chain);
-        let old_price = old_price_data.price_gwei;
+        let old_price = old_price_data.price_wei;
+        let gas_token = old_price_data.gas_token;
 
         // Update price
         let new_price = GasPrice {
-            price_gwei,
-            volatility_24h: if (volatility_24h > MAX_VOLATILITY) { MAX_VOLATILITY } else { volatility_24h },
+            price_wei,
+            gas_token,
             high_24h,
             low_24h,
             timestamp_ms: current_time,
@@ -159,8 +167,8 @@ module gas_oracle::oracle {
         sui::event::emit(GasPriceUpdated {
             chain,
             old_price,
-            new_price: price_gwei,
-            volatility: volatility_24h,
+            new_price: price_wei,
+            gas_token,
             timestamp_ms: current_time,
         });
     }
@@ -171,18 +179,15 @@ module gas_oracle::oracle {
         oracle: &mut GasOracle,
         clock: &Clock,
         chains: vector<String>,
-        prices: vector<u64>,
-        volatilities: vector<u64>,
+        prices_wei: vector<u128>,
     ) {
         let len = vector::length(&chains);
-        assert!(vector::length(&prices) == len, EInvalidPrice);
-        assert!(vector::length(&volatilities) == len, EInvalidPrice);
+        assert!(vector::length(&prices_wei) == len, EInvalidPrice);
 
         let mut i = 0;
         while (i < len) {
             let chain = *vector::borrow(&chains, i);
-            let price = *vector::borrow(&prices, i);
-            let volatility = *vector::borrow(&volatilities, i);
+            let price = *vector::borrow(&prices_wei, i);
 
             update_gas_price(
                 admin,
@@ -190,7 +195,6 @@ module gas_oracle::oracle {
                 clock,
                 chain,
                 price,
-                volatility,
                 price, // high = current for batch
                 price, // low = current for batch
             );
@@ -202,23 +206,23 @@ module gas_oracle::oracle {
     // ============ View Functions ============
 
     /// Get current gas price for a chain
-    public fun get_current_price(oracle: &GasOracle, chain: String): u64 {
+    public fun get_current_price(oracle: &GasOracle, chain: String): u128 {
         assert!(table::contains(&oracle.prices, chain), EChainNotSupported);
         let price_data = table::borrow(&oracle.prices, chain);
-        price_data.price_gwei
+        price_data.price_wei
+    }
+
+    /// Get gas token for a chain
+    public fun get_gas_token(oracle: &GasOracle, chain: String): String {
+        assert!(table::contains(&oracle.prices, chain), EChainNotSupported);
+        let price_data = table::borrow(&oracle.prices, chain);
+        price_data.gas_token
     }
 
     /// Get full price data for a chain
     public fun get_price_data(oracle: &GasOracle, chain: String): GasPrice {
         assert!(table::contains(&oracle.prices, chain), EChainNotSupported);
         *table::borrow(&oracle.prices, chain)
-    }
-
-    /// Get volatility for a chain
-    public fun get_volatility(oracle: &GasOracle, chain: String): u64 {
-        assert!(table::contains(&oracle.prices, chain), EChainNotSupported);
-        let price_data = table::borrow(&oracle.prices, chain);
-        price_data.volatility_24h
     }
 
     /// Check if price is stale
@@ -239,12 +243,12 @@ module gas_oracle::oracle {
         // Calculate approximate 24h average from high and low
         let avg_24h = (price_data.high_24h + price_data.low_24h) / 2;
         
-        if (avg_24h == 0 || price_data.price_gwei >= avg_24h) {
+        if (avg_24h == 0 || price_data.price_wei >= avg_24h) {
             return (false, 0)
         };
 
         // Calculate savings percentage
-        let savings = ((avg_24h - price_data.price_gwei) * 100) / avg_24h;
+        let savings = (((avg_24h - price_data.price_wei) * 100) / avg_24h as u64);
         
         // Good time to buy if savings > 10%
         (savings > 10, savings)
@@ -267,17 +271,18 @@ module gas_oracle::oracle {
 
     // ============ Admin Functions ============
 
-    /// Add a new supported chain
+    /// Add a new supported chain with its gas token
     public fun add_chain(
         _admin: &OracleAdminCap,
         oracle: &mut GasOracle,
         chain: String,
+        gas_token: String,
     ) {
         if (!table::contains(&oracle.prices, chain)) {
             vector::push_back(&mut oracle.supported_chains, chain);
             table::add(&mut oracle.prices, chain, GasPrice {
-                price_gwei: 0,
-                volatility_24h: 0,
+                price_wei: 0,
+                gas_token,
                 high_24h: 0,
                 low_24h: 0,
                 timestamp_ms: 0,
