@@ -89,7 +89,6 @@ module gas_oracle::oracle {
             b"arbitrum".to_string(),
             b"polygon".to_string(),
             b"optimism".to_string(),
-            b"arc".to_string(),
         ];
         
         let gas_tokens = vector[
@@ -98,7 +97,6 @@ module gas_oracle::oracle {
             b"ETH".to_string(),
             b"MATIC".to_string(),
             b"ETH".to_string(),
-            b"USDC".to_string(),
         ];
 
         let mut i = 0;

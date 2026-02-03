@@ -154,4 +154,3 @@ You will need these to configure your Bot `.env` file.
 | arbitrum | ETH |
 | polygon | MATIC |
 | optimism | ETH |
-| arc | USDC |
