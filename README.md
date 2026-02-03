@@ -49,12 +49,41 @@ suiup install sui@testnet
 sui client new-address ed25519
 ```
 
+### Manage Addresses
+List all addresses:
+```bash
+sui client addresses
+```
+
+Check active address:
+```bash
+sui client active-address
+```
+
+Switch active address:
+```bash
+sui client switch --address <ADDRESS>
+```
+
+### Transfer SUI
+To transfer SUI to another address:
+```bash
+sui client pay-sui --recipients <RECIPIENT_ADDRESS> --amounts <AMOUNT_IN_MIST>
+```
+*Note: 1 SUI = 1,000,000,000 MIST*
+
+### Consolidate Funds
+To merge all SUI coin objects into a single object (clean up wallet):
+```bash
+sui client pay-all-sui --recipient <YOUR_ADDRESS>
+```
+
 ### Switch to Testnet
 ```bash
 sui client switch --env testnet
 ```
 
-### 5. Get Testnet SUI
+### Get Testnet SUI
 **Option A: Discord Faucet**
 1. Join [Sui Discord](https://discord.gg/sui)
 2. Go to `#testnet-faucet`
@@ -65,7 +94,7 @@ sui client switch --env testnet
 sui client faucet
 ```
 
-### 6. Verify Balance
+### Verify Balance
 Check if you received the tokens:
 ```bash
 sui client gas
